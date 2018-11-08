@@ -85,3 +85,55 @@ def createDatabasePT(client, id, ruThroughput):
                 raise errors.HTTPFailure(e.status_code)
             else:
                 raise errors.HTTPFailure(e.status_code)
+
+def createCollectionPT(client, collectionName, Database):
+  databaseLink = "dbs/"+Database
+  coll = {
+          "id": collectionName,
+          "indexingPolicy": {
+              "indexingMode": "lazy",
+              "automatic": True
+          },
+          "partitionKey": {
+              "paths": [
+                "/id"
+              ],
+              "kind": "Hash"
+          }
+         }
+  try:
+      collection = client.CreateCollection(databaseLink, coll )
+      print('Collection with id \'{0}\' created'.format(collection['id']))
+  except errors.DocumentDBError as e:
+      if e.status_code == 409:
+         print('A collection with id '+collectionName+' already exists')
+      else: 
+          print(e)
+          raise errors.HTTPFailure(e.status_code)
+
+def getCollectionRU(client, collectionName, DBid ):
+  collection_link = 'dbs/' + DBid + '/colls/' + collectionName
+  collection = client.ReadCollection(collection_link)
+  # bad code ! assumes there is a return from the query
+  offer = list(client.QueryOffers('SELECT * FROM c WHERE c.resource = \'{0}\''.format(collection['_self'])))
+  # if offer is empty then there is no throughput specified for the collection and it is specified at the Database 
+  # test this and return appropriate offer throughput
+  if len(offer) == 0:
+      return None
+  elif len(offer) == 1:
+      return offer[0]['content']['offerThroughput']
+  else:
+      print("unexpected number of offers returned")
+
+def deleteDatabase(client, id):
+        try:
+           database_link = 'dbs/' + id
+           client.DeleteDatabase(database_link)
+
+           print('Database with id \'{0}\' was deleted'.format(id))
+
+        except errors.DocumentDBError as e:
+            if e.status_code == 404:
+               print('A database with id \'{0}\' does not exist'.format(id))
+            else: 
+                raise errors.HTTPFailure(e.status_code)
